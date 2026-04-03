@@ -57,17 +57,29 @@ nidbuyer/
 └── tests/           # Tests scoring, RAG, vision
 ```
 
-## Données P1
+## Tâche J1 — Consolidation des données P1
 
-Ce produit est construit sur les annonces collectées collectivement lors du Projet 1.
+Votre base RAG repose sur les annonces collectées en P1. **Avant la fin du premier jour :**
 
 ```bash
-# Récupérer les données depuis vos repos P1
-git remote add p1-a <url-repo-groupe-A>
-git remote add p1-b <url-repo-groupe-B>
+# 1. Copiez les CSV d'annonces de vos deux groupes P1 dans data/
+
+# 2. Fusionnez et dédupliquez
+python - <<'EOF'
+import pandas as pd
+a = pd.read_csv("data/annonces_groupe_a.csv")
+b = pd.read_csv("data/annonces_groupe_b.csv")
+merged = pd.concat([a, b]).drop_duplicates(subset=["url_source"])
+merged.to_csv("data/annonces.csv", index=False)
+print(f"{len(merged)} annonces consolidées")
+EOF
+
+# 3. Mettez à jour ce README avec le nombre réel ci-dessous
 ```
 
-Nombre d'annonces indexées dans la base RAG : **XXX**
+> Moins de 300 annonces après fusion ? Scraper de nouvelles annonces est votre priorité immédiate.
+
+Nombre d'annonces indexées dans la base RAG : **XXX** ← *à mettre à jour J1*
 
 ## Prompt Engineering
 
