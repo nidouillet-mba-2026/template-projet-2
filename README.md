@@ -25,11 +25,22 @@
 
 URL déployée : **https://TODO**
 
+## Pourquoi NidBuyer ?
+
+|  | BienIci | MeilleursAgents | SeLoger | NidBuyer |
+|---|:---:|:---:|:---:|:---:|
+| Lister des biens | ✅ | ✅ | ✅ | ✅ |
+| Estimer le prix | ❌ | ✅ vendeur | ❌ | ✅ acheteur |
+| Détecter sous-évaluations | ❌ | ❌ | ❌ | ✅ |
+| Alerter sur profil | ❌ | ❌ | partiel | ✅ |
+| Analyser les photos | ❌ | ❌ | ❌ | ✅ |
+| Conseiller sur l'offre | ❌ | ❌ | ❌ | ✅ |
+
 ## Lancer en local
 
 ```bash
 cp .env.example .env
-# Remplir ANTHROPIC_API_KEY dans .env
+# Remplir les variables dans .env (voir section Configuration)
 
 pip install -r requirements.txt
 
@@ -40,44 +51,65 @@ uvicorn backend.main:app --reload
 streamlit run frontend/app.py
 ```
 
+## Configuration
+
+Copier `.env.example` → `.env` et remplir :
+
+| Variable | Obligatoire | Description |
+|---|:---:|---|
+| `ANTHROPIC_API_KEY` | ✅ | Clé API Claude |
+| `SUPABASE_URL` | ✅ | URL du projet Supabase |
+| `SUPABASE_KEY` | ✅ | Clé anon/service Supabase |
+| `SMTP_HOST` / `SMTP_USER` / ... | ➕ | Alertes email |
+| `SLACK_WEBHOOK_URL` | ➕ | Alertes Slack |
+
 ## Architecture
 
 ```
 nidbuyer/
-├── backend/         # FastAPI — endpoints REST
-├── frontend/        # Streamlit — interface acheteur
-├── vision/          # R&D : estimation état du bien par les photos
-│   ├── model.py     # Interface commune (appelée par scoring.py)
-│   ├── cnn/         # Piste CNN
-│   ├── llm/         # Piste LLM multimodal
-│   ├── APPROACH.md  # Choix justifié + résultats mesurés
-│   └── benchmark.py # Script de comparaison
-├── prompts/         # System prompts + EXPERIMENTS.md
-├── data/            # Annonces + DVF 2024-2026
-└── tests/           # Tests scoring, RAG, vision
+├── backend/
+│   ├── main.py        # FastAPI + scheduler ingestion 7h00
+│   ├── rag.py         # ChromaDB — recherche vectorielle
+│   ├── scoring.py     # Score opportunité vs médiane DVF
+│   ├── ingestion.py   # Scraper → Supabase → ChromaDB
+│   ├── alert.py       # Alertes email / Slack
+│   └── sources/       # BienIci · LeBonCoin · Générique LLM · ...
+├── frontend/          # Streamlit — interface acheteur
+├── vision/            # R&D : CNN ou LLM multimodal
+│   ├── model.py       # Interface commune (appelée par scoring.py)
+│   ├── cnn/           # Piste CNN
+│   ├── llm/           # Piste LLM multimodal
+│   ├── APPROACH.md    # Choix justifié + résultats mesurés
+│   └── benchmark.py   # Script de comparaison
+├── prompts/           # System prompts + EXPERIMENTS.md
+├── tests/             # Tests scoring, RAG, vision
+└── .env               # SUPABASE_URL · SUPABASE_KEY · ANTHROPIC_API_KEY · ...
 ```
 
-## Tâche J1 — Consolidation des données P1
+**Les annonces ne transitent pas par GitHub.** Le pipeline écrit directement dans deux bases externes :
 
-Votre base RAG repose sur les annonces collectées en P1. **Avant la fin du premier jour :**
-
-```bash
-# 1. Copiez les CSV d'annonces de vos deux groupes P1 dans data/
-
-# 2. Fusionnez et dédupliquez
-python - <<'EOF'
-import pandas as pd
-a = pd.read_csv("data/annonces_groupe_a.csv")
-b = pd.read_csv("data/annonces_groupe_b.csv")
-merged = pd.concat([a, b]).drop_duplicates(subset=["url_source"])
-merged.to_csv("data/annonces.csv", index=False)
-print(f"{len(merged)} annonces consolidées")
-EOF
-
-# 3. Mettez à jour ce README avec le nombre réel ci-dessous
+```
+Scraper (quotidien 7h00)
+        ↓
+Supabase PostgreSQL   ← données brutes structurées
+        ↓
+ChromaDB (Railway / HF)  ← vecteurs pour le RAG
+        ↓
+FastAPI + Streamlit   ← interface acheteur déployée
 ```
 
-> Moins de 300 annonces après fusion ? Scraper de nouvelles annonces est votre priorité immédiate.
+> **Pourquoi pas un CSV dans le repo ?** Les annonces sont des données vivantes — un `git commit` par ingestion n'est pas une pratique prod. GitHub est pour le code ; Supabase est pour la data.
+
+## Tâche J1
+
+**Avant la fin du premier jour :**
+
+1. Importer les annonces P1 dans Supabase (table `annonces`) et lancer une première indexation ChromaDB
+2. Vérifier le compte : `GET /admin/status` — si < 300 annonces → scraper immédiatement
+3. Lancer `POST /admin/sync` pour valider le pipeline de bout en bout
+4. Déclarer les rôles dans ce README et pousser
+
+> *"Vos données P1 sont la fondation. Sans elles, pas de RAG."*
 
 Nombre d'annonces indexées dans la base RAG : **XXX** ← *à mettre à jour J1*
 
